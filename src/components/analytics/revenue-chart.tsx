@@ -30,7 +30,8 @@ export function RevenueChart({ data }: RevenueChartProps) {
                     tickFormatter={(value) => `€${value}`}
                 />
                 <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#f3f4f6' }}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#0c1322', borderColor: '#1e293b', color: '#f3f4f6' }}
                     itemStyle={{ color: '#22c55e' }}
                     formatter={(value: number) => [`€${value}`, 'Ingresos']}
                 />

@@ -27,10 +27,58 @@ export type Deal = {
     lead_id: string | null
     created_at: string
     profiles?: { full_name: string, email: string } | null
-    leads?: { name: string, email: string, company: string } | null
+
+    leads?: { name: string, email: string, company: string, phone: string | null } | null
+
     // Admin fields
     owner_email?: string
     owner_company?: string
+}
+
+const PIPELINE_STATUSES = ['qualified', 'proposal', 'negotiation', 'won', 'lost']
+
+function mapLeadToDeal(lead: any): Deal {
+    const interest = lead.deal || 'Oportunidad General'
+    const entityName = lead.company || lead.name
+
+    // CRM Best Practice: Title should be the Opportunity Name (Interest), Contact is the Person.
+    // However, to avoid duplicate "Blanqueamiento" cards, we can prefix properly or let the user decide.
+    // For now, let's try Title = "Interest" and let the Subtitle be "Name".
+    // If interest is generic, maybe prepend Name?
+    // "Name - Interest" is the safest unique title.
+
+    const title = `${entityName} - ${interest}`
+
+    // Lead status: new, contacted, qualified, proposal, negotiation, won, lost
+    // Deal stage: qualification, proposal, negotiation, won, lost
+
+    let stage = lead.status
+    if (stage === 'qualified') stage = 'qualification'
+
+    // Fallback if status is not in pipeline stages (e.g. 'new')
+    if (!PIPELINE_STATUSES.includes(stage) && stage !== 'qualification') {
+        stage = 'qualification'
+    }
+
+    return {
+        id: lead.id,
+        tenant_id: lead.tenant_id,
+        title: title,
+        value: lead.value || 0,
+        currency: 'EUR',
+        stage: stage,
+        active: true,
+        close_date: null,
+        contact_id: null,
+        lead_id: lead.id,
+        created_at: lead.created_at,
+        leads: {
+            name: lead.name, // The Person
+            email: lead.email,
+            company: lead.company, // The Company
+            phone: lead.phone
+        },
+    }
 }
 
 export async function getAllDealsForAdmin(clientId?: string): Promise<Deal[]> {
@@ -51,69 +99,43 @@ export async function getAllDealsForAdmin(clientId?: string): Promise<Deal[]> {
 
     const adminSupabase = getAdminClient()
     let query = adminSupabase
-        .from('deals')
-        .select(`
-            *,
-            profiles:contact_id (
-                full_name,
-                email
-            ),
-            leads:lead_id (
-                name,
-                email,
-                company
-            )
-        `)
+        .from('leads')
+        .select('*')
+        .in('status', PIPELINE_STATUSES) // Only pipeline leads
         .order('created_at', { ascending: false })
 
     if (clientId && clientId !== 'all') {
         query = query.eq('tenant_id', clientId)
     }
 
-    const { data: deals, error } = await query
+    const { data: leads, error } = await query
 
     if (error) {
-        console.error('Error fetching ALL deals:', error)
+        console.error('Error fetching ALL deals (from leads):', error)
         return []
     }
 
-    // We might need to join tenants manualy if we want company names, 
-    // but the Deal type doesn't strictly require it unless shown in table. 
-    // Existing getDeals doesn't return company name of the tenant.
-    // But for admin view, knowing the tenant is useful?
-    // Let's add tenant name if possible, similar to Leads.
-
-    // For now, return as is, assuming UI might not show it yet or will use tenant_id.
-    return deals as Deal[]
+    return leads.map(mapLeadToDeal)
 }
 
 export async function getDeals() {
     const supabase = await createClient()
 
-    const { data, error } = await supabase
-        .from('deals')
-        .select(`
-            *,
-            profiles:contact_id (
-                full_name,
-                email
-            ),
-            leads:lead_id (
-                name,
-                email,
-                company
-            )
-        `)
+    const { data: leads, error } = await supabase
+        .from('leads')
+        .select('*')
+        .in('status', PIPELINE_STATUSES)
         .order('created_at', { ascending: false })
 
     if (error) {
-        console.error('Error fetching deals:', error)
+        console.error('Error fetching deals (from leads):', error)
         return []
     }
 
-    return data as Deal[]
+    return leads.map(mapLeadToDeal)
 }
 
+// Create Deal -> Create Lead in Qualified Status?
 export async function createDeal(formData: FormData) {
     const supabase = await createClient()
 
@@ -134,23 +156,36 @@ export async function createDeal(formData: FormData) {
     const title = formData.get('title') as string
     const value = parseFloat(formData.get('value') as string) || 0
     const stage = formData.get('stage') as string || 'qualification'
-    const contactId = formData.get('contact_id') as string
-    const leadId = formData.get('lead_id') as string
 
-    if (!title) {
-        return { error: 'Title is required' }
+    // We need to parse title back to name/company? 
+    // Or just put it in name/deal?
+    // Let's assume title is 'Name' for now if specific format not required.
+    // Or we ask user for Name and Deal separately in the form? 
+    // The current DealForm has 'title'. 
+
+    // Mapping: Title -> Name (or Deal field?) 
+    // Let's use Title as Deal Name (field 'deal') and 'Unknown' as name?
+    // Or 'Title' as Name?
+
+    // Better: Title -> 'deal' field. Name -> 'New Prospect'.
+
+    const statusMap: Record<string, string> = {
+        'qualification': 'qualified',
+        'proposal': 'proposal',
+        'negotiation': 'negotiation',
+        'won': 'won',
+        'lost': 'lost'
     }
 
     const { error } = await supabase
-        .from('deals')
+        .from('leads')
         .insert({
             tenant_id: profile.tenant_id,
-            title,
+            name: title, // Use title as name for simplicity or split it?
             value,
-            stage,
-            contact_id: contactId || null,
-            lead_id: leadId || null,
-            active: true
+            status: statusMap[stage] || 'qualified',
+            deal: '', // Or title?
+            user_id: user.id // Assign to creator?
         })
 
     if (error) {
@@ -162,11 +197,21 @@ export async function createDeal(formData: FormData) {
 }
 
 export async function updateDealStage(dealId: string, newStage: string) {
+    // dealId is leadId
     const supabase = await createClient()
 
+    const statusMap: Record<string, string> = {
+        'qualification': 'qualified',
+        'proposal': 'proposal',
+        'negotiation': 'negotiation',
+        'won': 'won',
+        'lost': 'lost'
+    }
+
     const { error } = await supabase
-        .from('deals')
-        .update({ stage: newStage, updated_at: new Date().toISOString() })
+        .from('leads')
+        .update({ status: statusMap[newStage] }) // removed updated_at as it might not distinguish
+        // .update({ status: statusMap[newStage], updated_at: new Date().toISOString() })
         .eq('id', dealId)
 
     if (error) {
@@ -184,13 +229,20 @@ export async function updateDeal(dealId: string, formData: FormData) {
     const value = parseFloat(formData.get('value') as string) || 0
     const stage = formData.get('stage') as string
 
+    const statusMap: Record<string, string> = {
+        'qualification': 'qualified',
+        'proposal': 'proposal',
+        'negotiation': 'negotiation',
+        'won': 'won',
+        'lost': 'lost'
+    }
+
     const { error } = await supabase
-        .from('deals')
+        .from('leads')
         .update({
-            title,
+            name: title, // Mapping title back to name?
             value,
-            stage,
-            updated_at: new Date().toISOString()
+            status: statusMap[stage],
         })
         .eq('id', dealId)
 
@@ -206,7 +258,7 @@ export async function deleteDeal(dealId: string) {
     const supabase = await createClient()
 
     const { error } = await supabase
-        .from('deals')
+        .from('leads')
         .delete()
         .eq('id', dealId)
 

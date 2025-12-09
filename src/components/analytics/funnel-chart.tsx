@@ -31,7 +31,8 @@ export function FunnelChart({ data }: FunnelChartProps) {
                     axisLine={false}
                 />
                 <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#f3f4f6' }}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#0c1322', borderColor: '#1e293b', color: '#f3f4f6' }}
                     itemStyle={{ color: '#a78bfa' }}
                 />
                 <Area

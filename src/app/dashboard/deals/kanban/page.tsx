@@ -30,7 +30,7 @@ export default async function KanbanPage({ searchParams }: KanbanPageProps) {
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight mb-2">
-                            Pipeline
+                            Funnel
                         </h1>
                         <p className="text-muted-foreground">
                             Arrastra y suelta las tarjetas para actualizar su estado.

@@ -51,9 +51,6 @@ export default async function LoginPage({
                             <Button formAction={login} className="w-full font-bold shadow-[0_0_20px_-5px_var(--color-primary)] hover:shadow-[0_0_30px_-5px_var(--color-primary)] transition-shadow duration-300">
                                 Sign In
                             </Button>
-                            <Button formAction={signup} variant="outline" className="w-full opacity-70 hover:opacity-100">
-                                Sign Up
-                            </Button>
                         </div>
                     </form>
                 </CardContent>

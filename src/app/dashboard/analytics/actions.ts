@@ -13,32 +13,35 @@ export type AnalyticsData = {
     leadSourceData: { name: string; value: number }[]
 }
 
+// Pipeline statuses (leads that are in the sales funnel)
+const PIPELINE_STATUSES = ['qualified', 'proposal', 'negotiation', 'won', 'lost']
+
 export async function getAnalyticsData(): Promise<AnalyticsData> {
     const supabase = await createClient()
     const profile = await getProfile()
 
     if (!profile) throw new Error('Not authenticated')
 
-    // Base query builder
-    let query = supabase.from('deals').select('*')
+    // Build query for leads - RLS will filter by tenant automatically for clients
+    // But we explicitly filter for clarity and for admins who might want all data
+    let query = supabase.from('leads').select('*')
 
-    // Add tenant filter if needed (assuming RLS handles strict tenant isolation, but good to be explicit if tenant_id is available)
-    if (profile.tenant_id) {
-        query = query.eq('tenant_id', profile.tenant_id)
-    } else {
-        // Fallback for non-tenant users (e.g. personal usage if any) or admin view override
-        // For now rely on RLS
-    }
+    // If client (not admin), RLS will filter by tenant_id
+    // For admins without a specific tenant filter, we get all leads
+    // This relies on the RLS policies we set up
 
-    const { data: deals, error: dealsError } = await query
+    const { data: leads, error: leadsError } = await query
 
-    if (dealsError) throw new Error(dealsError.message)
+    if (leadsError) throw new Error(leadsError.message)
+
+    // Filter to pipeline leads only for funnel calculations
+    const pipelineLeads = leads.filter(l => PIPELINE_STATUSES.includes(l.status))
 
     // Calculate KPIs
-    const wonDeals = deals.filter(d => d.stage === 'won')
-    const totalRevenue = wonDeals.reduce((sum, d) => sum + (d.value || 0), 0)
-    const wonDealsCount = wonDeals.length
-    const totalClosed = deals.filter(d => ['won', 'lost'].includes(d.stage)).length
+    const wonLeads = leads.filter(l => l.status === 'won')
+    const totalRevenue = wonLeads.reduce((sum, l) => sum + (l.value || 0), 0)
+    const wonDealsCount = wonLeads.length
+    const totalClosed = leads.filter(l => ['won', 'lost'].includes(l.status)).length
 
     const conversionRate = totalClosed > 0
         ? Math.round((wonDealsCount / totalClosed) * 100)
@@ -58,23 +61,21 @@ export async function getAnalyticsData(): Promise<AnalyticsData> {
         months.set(key, 0)
     }
 
-    wonDeals.forEach(deal => {
-        if (!deal.created_at) return
-        const date = new Date(deal.created_at)
-        // Only count if within last 6 months approx (simplification)
+    wonLeads.forEach(lead => {
+        if (!lead.created_at) return
+        const date = new Date(lead.created_at)
         const key = date.toLocaleString('es-ES', { month: 'short' })
         if (months.has(key)) {
-            months.set(key, (months.get(key) || 0) + (deal.value || 0))
+            months.set(key, (months.get(key) || 0) + (lead.value || 0))
         }
     })
 
     const revenueByMonth = Array.from(months.entries()).map(([name, value]) => ({ name, value }))
 
-    // Chart: Funnel
-    const stages = ['qualification', 'proposal', 'negotiation', 'won', 'lost']
-    // Translation map for display
+    // Chart: Funnel - using lead statuses
+    const stages = ['qualified', 'proposal', 'negotiation', 'won', 'lost']
     const stageLabels: Record<string, string> = {
-        'qualification': 'Cualificación',
+        'qualified': 'Cualificación',
         'proposal': 'Propuesta',
         'negotiation': 'Negociación',
         'won': 'Ganado',
@@ -83,13 +84,10 @@ export async function getAnalyticsData(): Promise<AnalyticsData> {
 
     const funnelData = stages.map(stage => ({
         name: stageLabels[stage] || stage,
-        value: deals.filter(d => d.stage === stage).length
+        value: leads.filter(l => l.status === stage).length
     }))
 
-    // Chart: Lead Sources (Need to fetch leads linked to deals or just raw leads?)
-    // Let's fetch ALL leads for source analysis
-    const { data: leads } = await supabase.from('leads').select('source')
-
+    // Chart: Lead Sources - from same leads data (already filtered by RLS)
     const sourceCounts = new Map<string, number>()
     leads?.forEach(lead => {
         const source = lead.source || 'Desconocido'
@@ -112,3 +110,4 @@ export async function getAnalyticsData(): Promise<AnalyticsData> {
         leadSourceData
     }
 }
+

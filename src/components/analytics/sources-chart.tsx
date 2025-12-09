@@ -27,7 +27,15 @@ export function SourcesChart({ data }: SourcesChartProps) {
                     ))}
                 </Pie>
                 <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#f3f4f6' }}
+                    contentStyle={{
+                        backgroundColor: '#0c1322',
+                        border: 'none',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+                        color: '#f3f4f6',
+                        padding: '8px 12px'
+                    }}
+                    itemStyle={{ color: '#22c55e' }}
                 />
                 <Legend />
             </PieChart>

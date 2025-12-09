@@ -12,7 +12,7 @@ export type Profile = {
     updated_at: string
 }
 
-export async function getProfile(): Promise<Profile | null> {
+export async function getProfile(): Promise<(Profile & { tenant_name?: string | null }) | null> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -20,11 +20,22 @@ export async function getProfile(): Promise<Profile | null> {
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+            *,
+            tenants (
+                name
+            )
+        `)
         .eq('id', user.id)
         .single()
 
-    return profile
+    if (!profile) return null
+
+    // Return profile with tenant_name
+    return {
+        ...profile,
+        tenant_name: profile.tenants?.name || null
+    }
 }
 
 export async function isAdmin(): Promise<boolean> {

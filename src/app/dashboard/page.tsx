@@ -1,9 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, DollarSign, Activity, TrendingUp, Euro } from "lucide-react"
-import { getDashboardMetrics, seedLeads } from "./actions"
-import { Button } from "@/components/ui/button"
+import { getDashboardMetrics, getMonthComparison } from "./actions"
 import { cookies } from 'next/headers'
 import { getTenantSettings } from "./settings/actions"
+import { ComparisonWidget } from "@/components/dashboard/comparison-widget"
 
 interface DashboardPageProps {
     searchParams: Promise<{ client?: string }>
@@ -17,6 +17,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
     // Fetch metrics with filter
     const { totalRevenue, activeLeads, salesCount, recentSales } = await getDashboardMetrics(selectedClient)
+    const comparison = await getMonthComparison(selectedClient)
 
     // Fetch settings for currency
     const settings = await getTenantSettings()
@@ -25,13 +26,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between space-y-2">
+            <div className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold tracking-tight text-foreground">Panel Principal</h2>
-                <form action={seedLeads}>
-                    <Button type="submit" variant="outline" size="sm">
-                        Generar Datos Demo
-                    </Button>
-                </form>
             </div>
 
             {/* Metric Cards */}
@@ -98,13 +94,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                 <Card className="col-span-4 bg-card/40 border-border">
                     <CardHeader>
-                        <CardTitle>Resumen General</CardTitle>
+                        <CardTitle>Este Mes vs Anterior</CardTitle>
                     </CardHeader>
-                    <CardContent className="pl-2">
-                        {/* Chart Placeholder */}
-                        <div className="h-[200px] flex items-center justify-center text-muted-foreground border border-dashed border-border/50 rounded-md bg-background/20">
-                            Gráfico de Datos Próximamente
-                        </div>
+                    <CardContent>
+                        <ComparisonWidget data={comparison} currency={currency} />
                     </CardContent>
                 </Card>
                 <Card className="col-span-3 bg-card/40 border-border">

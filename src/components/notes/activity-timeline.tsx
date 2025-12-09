@@ -65,64 +65,66 @@ export function ActivityList({ entityType, entityId, refreshTrigger = 0 }: Activ
     }
 
     return (
-        <div className="flex flex-col h-full bg-muted/30 rounded-lg border border-border">
+        <div className="flex flex-col h-full bg-muted/30 rounded-lg border border-border overflow-hidden">
             {/* Timeline List */}
-            <ScrollArea className="flex-1 p-4">
-                {isLoading ? (
-                    <div className="flex justify-center p-4">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                ) : notes.length === 0 ? (
-                    <div className="text-center text-muted-foreground p-8 text-sm">
-                        No hay actividad registrada aún.
-                    </div>
-                ) : (
-                    <div className="space-y-6 relative ml-2">
-                        {/* Vertical line */}
-                        <div className="absolute left-[19px] top-2 bottom-2 w-[2px] bg-border -z-10" />
+            <ScrollArea className="flex-1 h-full">
+                <div className="p-4">
+                    {isLoading ? (
+                        <div className="flex justify-center p-4">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : notes.length === 0 ? (
+                        <div className="text-center text-muted-foreground p-8 text-sm">
+                            No hay actividad registrada aún.
+                        </div>
+                    ) : (
+                        <div className="space-y-6 relative ml-2">
+                            {/* Vertical line */}
+                            <div className="absolute left-[19px] top-2 bottom-2 w-[2px] bg-border -z-10" />
 
-                        {notes.map((note) => {
-                            const Icon = ICONS[note.type]
-                            return (
-                                <div key={note.id} className="relative flex gap-4 group">
-                                    {/* Icon Bubble */}
-                                    <div className={cn(
-                                        "w-10 h-10 rounded-full flex items-center justify-center border-2 border-background shadow-sm shrink-0",
-                                        COLORS[note.type]
-                                    )}>
-                                        <Icon className="h-5 w-5" />
-                                    </div>
+                            {notes.map((note) => {
+                                const Icon = ICONS[note.type] || MessageSquare
+                                return (
+                                    <div key={note.id} className="relative flex gap-4 group">
+                                        {/* Icon Bubble */}
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center border-2 border-background shadow-sm shrink-0",
+                                            COLORS[note.type] || COLORS.note
+                                        )}>
+                                            <Icon className="h-5 w-5" />
+                                        </div>
 
-                                    {/* Content Card */}
-                                    <div className="flex-1 bg-card border border-border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
-                                        <div className="flex justify-between items-start mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-sm">{note.user?.full_name || 'Usuario'}</span>
-                                                <span className="text-xs text-muted-foreground">• registró una {LABELS[note.type].toLowerCase()}</span>
+                                        {/* Content Card */}
+                                        <div className="flex-1 bg-card border border-border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-semibold text-sm">{note.user?.full_name || 'Usuario'}</span>
+                                                    <span className="text-xs text-muted-foreground">• registró una {LABELS[note.type]?.toLowerCase() || 'actividad'}</span>
+                                                </div>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {new Date(note.created_at).toLocaleString()}
+                                                </span>
                                             </div>
-                                            <span className="text-xs text-muted-foreground">
-                                                {new Date(note.created_at).toLocaleString()}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm whitespace-pre-wrap text-foreground/90">
-                                            {note.content}
-                                        </p>
-                                        <div className="mt-2 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                                                onClick={() => handleDelete(note.id)}
-                                            >
-                                                <Trash2 className="h-3 w-3" />
-                                            </Button>
+                                            <p className="text-sm whitespace-pre-wrap text-foreground/90">
+                                                {note.content}
+                                            </p>
+                                            <div className="mt-2 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                                    onClick={() => handleDelete(note.id)}
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
             </ScrollArea>
         </div>
     )

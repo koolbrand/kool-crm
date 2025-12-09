@@ -49,39 +49,41 @@ export default async function SettingsPage() {
                 </CardContent>
             </Card>
 
-            {/* API Key Card */}
-            <Card className="bg-card/40 border-border shadow-lg backdrop-blur-sm">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Key className="h-5 w-5 text-primary" />
-                        Clave API
-                    </CardTitle>
-                    <CardDescription>
-                        Usa esta clave para enviar leads vía API (n8n, Zapier, etc.)
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                            <code className="flex-1 p-3 bg-background/50 rounded-md border border-border text-sm font-mono break-all">
-                                {profile.api_key}
-                            </code>
-                        </div>
-                        <div className="border-t border-border pt-4">
-                            <h4 className="font-medium mb-2">Cómo usar</h4>
-                            <p className="text-sm text-muted-foreground mb-3">
-                                Envía una petición POST a <code className="bg-background/50 px-1 rounded">/api/leads</code> con:
-                            </p>
-                            <pre className="p-3 bg-background/50 rounded-md border border-border text-xs overflow-x-auto">
-                                {`curl -X POST ${typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/leads \\
+            {/* API Key Card - Admin Only */}
+            {profile.role === 'admin' && (
+                <Card className="bg-card/40 border-border shadow-lg backdrop-blur-sm">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Key className="h-5 w-5 text-primary" />
+                            Clave API
+                        </CardTitle>
+                        <CardDescription>
+                            Usa esta clave para enviar leads vía API (n8n, Zapier, etc.)
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <code className="flex-1 p-3 bg-background/50 rounded-md border border-border text-sm font-mono break-all">
+                                    {profile.api_key}
+                                </code>
+                            </div>
+                            <div className="border-t border-border pt-4">
+                                <h4 className="font-medium mb-2">Cómo usar</h4>
+                                <p className="text-sm text-muted-foreground mb-3">
+                                    Envía una petición POST a <code className="bg-background/50 px-1 rounded">/api/leads</code> con:
+                                </p>
+                                <pre className="p-3 bg-background/50 rounded-md border border-border text-xs overflow-x-auto">
+                                    {`curl -X POST ${typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/leads \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${profile.api_key}" \\
   -d '{"name": "Juan Pérez", "email": "juan@ejemplo.com", "phone": "+34600000000"}'`}
-                            </pre>
+                                </pre>
+                            </div>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     )
 }

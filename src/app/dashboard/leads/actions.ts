@@ -24,6 +24,7 @@ export type Lead = {
     value: number
     status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost'
     source: string | null
+    deal: string | null
     notes: string | null
     metadata: Record<string, any> | null
     created_at: string
@@ -155,6 +156,7 @@ export async function getClientsForFilter(): Promise<ClientOption[]> {
 
 
 export async function createLead(formData: FormData) {
+    console.log('[createLead] Called')
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -200,12 +202,20 @@ export async function createLead(formData: FormData) {
         phone: formData.get('phone') as string || null,
         company: formData.get('company') as string || null,
         value: parseFloat(formData.get('value') as string) || 0,
+        deal: formData.get('deal') as string || null, // Native column
         status: formData.get('status') as string || 'new',
         source: formData.get('source') as string || null,
         notes: formData.get('notes') as string || null,
+        metadata: {
+            job_title: formData.get('job_title') as string || null,
+            linkedin: formData.get('linkedin') as string || null,
+        }
     }
 
-    const { error } = await supabase.from('leads').insert(lead)
+
+    const { data: insertedLead, error } = await supabase.from('leads').insert(lead).select().single()
+
+
 
     if (error) {
         console.error('Error creating lead:', error)
@@ -213,10 +223,12 @@ export async function createLead(formData: FormData) {
     }
 
     revalidatePath('/dashboard/leads')
+
     return { success: true }
 }
 
 export async function updateLead(id: string, formData: FormData) {
+    console.log('[updateLead] Called for ID:', id)
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -233,15 +245,36 @@ export async function updateLead(id: string, formData: FormData) {
 
     const isAdmin = profile?.role === 'admin'
 
+    // Fetch existing lead to preserve metadata AND for fallback data
+    const { data: existingLead, error: fetchError } = await supabase
+        .from('leads')
+        .select('metadata, tenant_id, company, name, deal, value, user_id')
+        .eq('id', id)
+        .single()
+
+    if (fetchError) {
+        console.error('Error fetching existing lead:', fetchError)
+        return { error: fetchError.message }
+    }
+
+    const currentMetadata = existingLead?.metadata || {}
+    const newMetadata = {
+        ...currentMetadata,
+        job_title: formData.get('job_title') as string || null,
+        linkedin: formData.get('linkedin') as string || null,
+    }
+
     const updates: any = {
         name: formData.get('name') as string,
         email: formData.get('email') as string || null,
         phone: formData.get('phone') as string || null,
         company: formData.get('company') as string || null,
         value: parseFloat(formData.get('value') as string) || 0,
+        deal: formData.get('deal') as string || null, // Native column
         status: formData.get('status') as string,
         source: formData.get('source') as string || null,
         notes: formData.get('notes') as string || null,
+        metadata: newMetadata,
         updated_at: new Date().toISOString(),
     }
 
@@ -277,16 +310,6 @@ export async function updateLead(id: string, formData: FormData) {
                 updates.user_id = tenantUser ? null : (tenantUser as any)?.id // Wait, if allowed null, use null.
                 // To be safe: Use null. Migration SHOULD be run.
                 updates.user_id = null
-
-                // Keep fallback just in case? 
-                // Previous logic:
-                if (!updates.user_id && tenantUser) {
-                    // checks if column is nullable? No easy way.
-                    // Let's assume user ran migration.
-                    // But if fallback is needed:
-                    // updates.user_id = tenantUser.id
-                    // No, let's respect explicit "No User" choice if migration is present.
-                }
             }
         }
     }
@@ -295,18 +318,8 @@ export async function updateLead(id: string, formData: FormData) {
 
     // If not admin, ensure they own the lead
     if (!isAdmin) {
-        // Check for specific ownership OR tenant access (if policy allowed update)
-        // For simplicity/safety, we stick to user_id verification for non-admins for now, 
-        // OR allow if they are in same tenant? RLS handles it.
-        // But the previous code enforced user_id. Let's rely on RLS partially? 
+        // We rely on RLS partially? 
         // Actually, let's just strip the check if RLS is trusted, or check tenant_id matches user's tenant.
-
-        // Fetch user tenant
-        // const { data: p } = ...
-        // For now, let's keep user_id check or rely on RLS policies we set (Users can update tenant leads)
-        // Since we enabled "Users can update tenant leads" policy, we don't need manual .eq('user_id') if we trust RLS.
-        // But leads might have user_id=null now.
-        // So we REMOVE .eq('user_id') and let RLS handle security.
     }
 
     const { error } = await query
@@ -317,7 +330,11 @@ export async function updateLead(id: string, formData: FormData) {
         return { error: error.message }
     }
 
+
+
+
     revalidatePath('/dashboard/leads')
+
     return { success: true }
 }
 
@@ -363,6 +380,8 @@ export type Activity = {
         email: string
     }
 }
+
+
 
 export async function getLeadDetails(id: string): Promise<Lead | null> {
     const supabase = await createClient()

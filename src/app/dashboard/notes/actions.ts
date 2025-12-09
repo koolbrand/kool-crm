@@ -26,33 +26,46 @@ export async function createNote(formData: FormData) {
     const profile = await getProfile()
 
     if (!profile) {
+        console.error('createNote: No profile found')
         return { error: 'Unauthorized' }
     }
 
     const content = formData.get('content') as string
     const type = formData.get('type') as ActivityType
     const leadId = formData.get('leadId') as string
-    const dealId = formData.get('dealId') as string
+
+    console.log('createNote: Attempting insert', { content, type, leadId, userId: profile.id, tenantId: profile.tenant_id })
 
     if (!content) {
         return { error: 'Content is required' }
     }
 
-    const { error } = await supabase.from('notes').insert({
+    if (!profile.tenant_id) {
+        console.error('createNote: Profile has no tenant_id')
+        return { error: 'User has no tenant assigned' }
+    }
+
+    const insertData = {
         content,
         type: type || 'note',
-        lead_id: leadId || null,
-        deal_id: dealId || null,
+        lead_id: leadId,
         user_id: profile.id,
         tenant_id: profile.tenant_id
-    })
+    }
+
+    console.log('createNote: Insert data:', insertData)
+
+    const { data, error } = await supabase.from('activities').insert(insertData).select()
 
     if (error) {
-        console.error('Error creating note:', error)
+        console.error('createNote: Error:', error)
         return { error: error.message }
     }
 
+    console.log('createNote: Success, inserted:', data)
+
     revalidatePath('/dashboard')
+    revalidatePath('/dashboard/leads')
     return { success: true }
 }
 
@@ -61,28 +74,34 @@ export async function getNotes(entityType: 'lead' | 'deal', entityId: string): P
 
     const column = entityType === 'lead' ? 'lead_id' : 'deal_id'
 
-    const { data, error } = await supabase
-        .from('notes')
-        .select(`
-            *,
-            user:user_id (
-                full_name,
-                email
-            )
-        `)
+    // First get activities
+    const { data: activities, error } = await supabase
+        .from('activities')
+        .select('*')
         .eq(column, entityId)
         .order('created_at', { ascending: false })
 
     if (error) {
-        console.error('Error fetching notes:', error)
+        console.error('Error fetching activities:', error)
         return []
     }
 
-    // Map the user relation correctly if it comes back as an array or object
-    // Supabase join returns user as an object usually if it's a single relation
-    return (data as any[]).map(note => ({
-        ...note,
-        user: note.user // Assuming Supabase returns the joined user data
+    if (!activities || activities.length === 0) {
+        return []
+    }
+
+    // Get user profiles for the activities
+    const userIds = [...new Set(activities.map(a => a.user_id))]
+    const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds)
+
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+
+    return activities.map(activity => ({
+        ...activity,
+        user: profileMap.get(activity.user_id) || { full_name: 'Usuario', email: '' }
     })) as Note[]
 }
 
@@ -90,7 +109,7 @@ export async function deleteNote(id: string) {
     const supabase = await createClient()
 
     const { error } = await supabase
-        .from('notes')
+        .from('activities')
         .delete()
         .eq('id', id)
 
@@ -99,5 +118,6 @@ export async function deleteNote(id: string) {
     }
 
     revalidatePath('/dashboard')
+    revalidatePath('/dashboard/leads')
     return { success: true }
 }

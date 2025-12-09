@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { type Profile } from '@/lib/auth'
 
-export async function getProfileAction(): Promise<Profile | null> {
+export async function getProfileAction(): Promise<(Profile & { tenant_name?: string | null }) | null> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -12,11 +12,22 @@ export async function getProfileAction(): Promise<Profile | null> {
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+            *,
+            tenants (
+                name
+            )
+        `)
         .eq('id', user.id)
         .single()
 
-    return profile
+    if (!profile) return null
+
+    // Add tenant_name from joined data
+    return {
+        ...profile,
+        tenant_name: profile.tenants?.name || null
+    }
 }
 
 export async function updateProfile(formData: FormData) {
@@ -142,5 +153,47 @@ export async function updateTenantSettings(formData: FormData) {
 
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/settings')
+    return { success: true }
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        return { error: 'No autenticado' }
+    }
+
+    if (!user.email) {
+        return { error: 'Usuario sin email' }
+    }
+
+    // Verify current password by attempting to sign in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword
+    })
+
+    if (signInError) {
+        return { error: 'Contraseña actual incorrecta' }
+    }
+
+    // Update password
+    const { error } = await supabase.auth.updateUser({
+        password: newPassword
+    })
+
+    if (error) {
+        console.error('Error updating password:', error)
+        // Translate common Supabase error messages
+        if (error.message.includes('should be different from the old password')) {
+            return { error: 'La nueva contraseña debe ser diferente a la actual' }
+        }
+        if (error.message.includes('at least')) {
+            return { error: 'La contraseña debe tener al menos 6 caracteres' }
+        }
+        return { error: 'Error al cambiar la contraseña' }
+    }
+
     return { success: true }
 }

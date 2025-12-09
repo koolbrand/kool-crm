@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useRouter } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Phone, Mail } from 'lucide-react'
 import { DealForm } from '../deal-form'
 
 interface KanbanBoardProps {
@@ -98,31 +98,50 @@ export function KanbanBoard({ initialDeals, currency = 'EUR' }: KanbanBoardProps
                                 draggable={!isUpdating}
                                 onDragStart={(e) => handleDragStart(e, deal.id)}
                                 className={cn(
-                                    "cursor-move hover:shadow-md transition-all border-border/50 bg-card/80",
+                                    "cursor-move hover:shadow-md transition-all border-border/50 bg-card py-0",
                                     isUpdating === deal.id && "opacity-50 pointer-events-none",
-                                    draggedDealId === deal.id && "opacity-50 rotate-2"
+                                    draggedDealId === deal.id && "opacity-50 scale-105 shadow-lg ring-2 ring-primary/50"
                                 )}
                                 onClick={() => {
                                     setEditingDeal(deal)
                                     setFormOpen(true)
                                 }}
                             >
-                                <CardHeader className="p-3">
-                                    <div className="flex justify-between items-start gap-2">
-                                        <div className="flex-1 min-w-0">
-                                            <CardTitle className="text-sm font-medium leading-none mb-1 truncate">
-                                                {deal.title}
-                                            </CardTitle>
-                                            <p className="text-xs text-muted-foreground truncate">
-                                                {deal.profiles?.full_name || deal.leads?.name || 'Unknown'}
-                                            </p>
-                                        </div>
-                                        {isUpdating === deal.id && <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" />}
+                                <div className="p-3 space-y-2">
+                                    {/* Name */}
+                                    <p className="text-sm font-semibold text-foreground truncate leading-tight">
+                                        {deal.leads?.name || deal.title}
+                                    </p>
+
+                                    {/* Contact Info */}
+                                    <div className="space-y-0.5 overflow-hidden">
+                                        {deal.leads?.phone && (
+                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 overflow-hidden">
+                                                <Phone className="w-3 h-3 flex-shrink-0 opacity-70" />
+                                                <span className="truncate">{deal.leads.phone}</span>
+                                            </div>
+                                        )}
+                                        {deal.leads?.email && (
+                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 overflow-hidden">
+                                                <Mail className="w-3 h-3 flex-shrink-0 opacity-70" />
+                                                <span className="truncate" title={deal.leads.email}>{deal.leads.email}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="text-xs font-semibold text-foreground mt-3">
-                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: deal.currency || 'USD', maximumFractionDigits: 0 }).format(deal.value)}
+
+                                    {/* Deal / Interest Badge */}
+                                    <span className="inline-block text-[10px] font-medium text-primary px-1.5 py-0.5 rounded-sm bg-primary/10 truncate max-w-full">
+                                        {deal.title.split(' - ')[1] || deal.title}
+                                    </span>
+
+                                    {/* Value */}
+                                    <div className="flex items-center justify-end pt-1.5 border-t border-border/30">
+                                        <span className="text-xs font-bold text-foreground tabular-nums">
+                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: deal.currency || 'EUR', maximumFractionDigits: 0 }).format(deal.value)}
+                                        </span>
+                                        {isUpdating === deal.id && <Loader2 className="h-3 w-3 animate-spin ml-2 text-muted-foreground" />}
                                     </div>
-                                </CardHeader>
+                                </div>
                             </Card>
                         ))}
                     </div>

@@ -104,3 +104,69 @@ export async function seedLeads(formData: FormData) {
     revalidatePath('/dashboard')
     return
 }
+
+export type MonthComparison = {
+    thisMonth: { leads: number; revenue: number; won: number; lost: number }
+    lastMonth: { leads: number; revenue: number; won: number; lost: number }
+}
+
+export async function getMonthComparison(clientId?: string): Promise<MonthComparison> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return {
+        thisMonth: { leads: 0, revenue: 0, won: 0, lost: 0 },
+        lastMonth: { leads: 0, revenue: 0, won: 0, lost: 0 }
+    }
+
+    // Check if admin
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    const isAdmin = profile?.role === 'admin'
+    const client = isAdmin ? getAdminClient() : supabase
+
+    // Calculate date ranges
+    const now = new Date()
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString()
+
+    // Helper to apply filter
+    const applyFilter = (query: any) => {
+        if (isAdmin && clientId && clientId !== 'all') {
+            return query.eq('tenant_id', clientId)
+        }
+        return query
+    }
+
+    // This month data
+    let thisMonthQuery = client.from('leads').select('status, value, created_at').gte('created_at', thisMonthStart)
+    thisMonthQuery = applyFilter(thisMonthQuery)
+    const { data: thisMonthData } = await thisMonthQuery
+
+    // Last month data
+    let lastMonthQuery = client.from('leads').select('status, value, created_at').gte('created_at', lastMonthStart).lte('created_at', lastMonthEnd)
+    lastMonthQuery = applyFilter(lastMonthQuery)
+    const { data: lastMonthData } = await lastMonthQuery
+
+    const calcMetrics = (data: any[] | null) => {
+        if (!data) return { leads: 0, revenue: 0, won: 0, lost: 0 }
+        const won = data.filter(l => l.status === 'won')
+        const lost = data.filter(l => l.status === 'lost')
+        return {
+            leads: data.length,
+            revenue: won.reduce((sum, l) => sum + (l.value || 0), 0),
+            won: won.length,
+            lost: lost.length
+        }
+    }
+
+    return {
+        thisMonth: calcMetrics(thisMonthData),
+        lastMonth: calcMetrics(lastMonthData)
+    }
+}

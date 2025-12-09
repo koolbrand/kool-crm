@@ -29,8 +29,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { MoreHorizontal, Pencil, Trash2, Mail, Phone, Building2, Plus, Search, ArrowRightLeft } from 'lucide-react'
+import { MoreHorizontal, Pencil, Trash2, Mail, Phone, Building2, Plus, Search, ArrowRightLeft, Instagram, Facebook, Download } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
     Dialog,
     DialogContent,
@@ -40,7 +41,6 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { createDeal } from '../deals/actions'
 import { useRouter } from 'next/navigation'
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
@@ -48,6 +48,7 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
     contacted: { label: 'Contactado', variant: 'secondary', className: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
     qualified: { label: 'Cualificado', variant: 'secondary', className: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
     proposal: { label: 'Propuesta', variant: 'secondary', className: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+    negotiation: { label: 'Negociación', variant: 'secondary', className: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     won: { label: 'Ganado', variant: 'default', className: 'bg-green-500/20 text-green-400 border-green-500/30' },
     lost: { label: 'Perdido', variant: 'destructive', className: 'bg-red-500/20 text-red-400 border-red-500/30' },
 }
@@ -64,10 +65,10 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
     // const [leads] = useState(initialLeads) // Removed to allow server updates
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<string>('all')
+    const [dateFrom, setDateFrom] = useState<string>('')
+    const [dateTo, setDateTo] = useState<string>('')
     const [formOpen, setFormOpen] = useState(false)
-    const [convertOpen, setConvertOpen] = useState(false)
     const [editingLead, setEditingLead] = useState<Lead | null>(null)
-    const [convertingLead, setConvertingLead] = useState<Lead | null>(null)
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
 
@@ -78,37 +79,27 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
 
         const matchesStatus = statusFilter === 'all' || lead.status === statusFilter
 
-        return matchesSearch && matchesStatus
+        // Date filtering
+        let matchesDate = true
+        if (dateFrom) {
+            const leadDate = new Date(lead.created_at)
+            const fromDate = new Date(dateFrom)
+            fromDate.setHours(0, 0, 0, 0)
+            matchesDate = matchesDate && leadDate >= fromDate
+        }
+        if (dateTo) {
+            const leadDate = new Date(lead.created_at)
+            const toDate = new Date(dateTo)
+            toDate.setHours(23, 59, 59, 999)
+            matchesDate = matchesDate && leadDate <= toDate
+        }
+
+        return matchesSearch && matchesStatus && matchesDate
     })
 
     function handleEdit(lead: Lead) {
         setEditingLead(lead)
         setFormOpen(true)
-    }
-
-    function handleConvertClick(lead: Lead) {
-        setConvertingLead(lead)
-        setConvertOpen(true)
-    }
-
-    async function handleConvertSubmit(formData: FormData) {
-        if (!convertingLead) return
-
-        formData.append('lead_id', convertingLead.id)
-        // Default stage is qualification, already handled in action if not sent
-
-        startTransition(async () => {
-            const result = await createDeal(formData)
-            if (result.success) {
-                setConvertOpen(false)
-                setConvertingLead(null)
-                // Optional: router.push('/dashboard/deals')
-                alert('Deal creado y enviado al Pipeline')
-                router.refresh()
-            } else {
-                alert(result.error)
-            }
-        })
     }
 
     function handleDelete(id: string) {
@@ -141,34 +132,76 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
         }).format(new Date(dateString))
     }
 
+    function exportToCSV() {
+        const headers = ['Nombre', 'Email', 'Teléfono', 'Empresa', 'Valor', 'Estado', 'Fuente', 'Deal', 'Fecha']
+        const rows = filteredLeads.map(lead => [
+            lead.name,
+            lead.email || '',
+            lead.phone || '',
+            lead.company || '',
+            lead.value?.toString() || '0',
+            statusConfig[lead.status]?.label || lead.status,
+            lead.source || '',
+            lead.deal || '',
+            formatDate(lead.created_at)
+        ])
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+        ].join('\n')
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `leads_${new Date().toISOString().split('T')[0]}.csv`
+        link.click()
+        URL.revokeObjectURL(url)
+    }
+
     return (
         <div className="space-y-4">
             {/* Header Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between">
-                <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Buscar leads..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9 bg-background/50"
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap gap-2 items-center">
+                    <div className="relative w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Buscar leads..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 bg-background/50"
+                        />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-[160px] bg-background/50">
+                            <SelectValue placeholder="Filtrar estado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos los Estados</SelectItem>
+                            {Object.entries(statusConfig).map(([value, { label }]) => (
+                                <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <DateRangePicker
+                        dateFrom={dateFrom}
+                        dateTo={dateTo}
+                        onDateFromChange={setDateFrom}
+                        onDateToChange={setDateTo}
                     />
+                    <div className="flex items-center gap-2 ml-auto">
+                        <Button variant="outline" onClick={exportToCSV} disabled={filteredLeads.length === 0}>
+                            <Download className="h-4 w-4 mr-2" />
+                            CSV
+                        </Button>
+                        <Button onClick={() => setFormOpen(true)} className="shadow-[0_0_20px_-5px_var(--color-primary)]">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Nuevo Lead
+                        </Button>
+                    </div>
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px] bg-background/50">
-                        <SelectValue placeholder="Filtrar por estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Todos los Estados</SelectItem>
-                        {Object.entries(statusConfig).map(([value, { label }]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                <Button onClick={() => setFormOpen(true)} className="shadow-[0_0_20px_-5px_var(--color-primary)]">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Lead
-                </Button>
             </div>
 
             {/* Table */}
@@ -181,9 +214,9 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                                 <TableHead className="text-muted-foreground">Cliente / Propietario</TableHead>
                             )}
                             <TableHead className="text-muted-foreground hidden md:table-cell">Contacto</TableHead>
+                            <TableHead className="text-muted-foreground">Deal</TableHead>
+                            <TableHead className="text-muted-foreground">Etapa</TableHead>
                             <TableHead className="text-muted-foreground hidden lg:table-cell">Empresa</TableHead>
-                            <TableHead className="text-muted-foreground">Valor</TableHead>
-                            <TableHead className="text-muted-foreground">Estado</TableHead>
                             <TableHead className="text-muted-foreground hidden sm:table-cell">Creado</TableHead>
                             <TableHead className="text-muted-foreground w-[50px]"></TableHead>
                         </TableRow>
@@ -211,7 +244,17 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                                                     {lead.name}
                                                 </button>
                                                 <div className="flex items-center gap-2 mt-1">
-                                                    {lead.source?.toLowerCase().includes('meta') || lead.source?.toLowerCase().includes('facebook') || lead.source?.toLowerCase().includes('instagram') ? (
+                                                    {lead.source?.toLowerCase().includes('instagram') ? (
+                                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-5 border-pink-500/50 bg-pink-500/10 text-pink-500 gap-1">
+                                                            <Instagram className="w-3 h-3" />
+                                                            Instagram
+                                                        </Badge>
+                                                    ) : lead.source?.toLowerCase().includes('facebook') ? (
+                                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-5 border-blue-600/50 bg-blue-600/10 text-blue-600 gap-1">
+                                                            <Facebook className="w-3 h-3" />
+                                                            Facebook
+                                                        </Badge>
+                                                    ) : lead.source?.toLowerCase().includes('meta') ? (
                                                         <Badge variant="outline" className="text-[10px] px-1 py-0 h-5 border-blue-500/50 bg-blue-500/10 text-blue-500 gap-1">
                                                             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.791-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
                                                             Meta
@@ -253,6 +296,22 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                                             )}
                                         </div>
                                     </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{formatCurrency(lead.value)}</span>
+                                            {lead.deal && (
+                                                <span className="text-xs text-muted-foreground">{lead.deal}</span>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge
+                                            variant={statusConfig[lead.status]?.variant || 'secondary'}
+                                            className={`${statusConfig[lead.status]?.className || ''} border`}
+                                        >
+                                            {statusConfig[lead.status]?.label || lead.status}
+                                        </Badge>
+                                    </TableCell>
                                     <TableCell className="hidden lg:table-cell">
                                         {lead.company && (
                                             <div className="flex items-center gap-1 text-muted-foreground">
@@ -260,19 +319,6 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                                                 {lead.company}
                                             </div>
                                         )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="font-medium text-primary">
-                                            {formatCurrency(lead.value)}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant={statusConfig[lead.status]?.variant || 'default'}
-                                            className={statusConfig[lead.status]?.className}
-                                        >
-                                            {statusConfig[lead.status]?.label || lead.status}
-                                        </Badge>
                                     </TableCell>
                                     <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
                                         {formatDate(lead.created_at)}
@@ -292,10 +338,6 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                                                     Editar
                                                 </DropdownMenuItem>
 
-                                                <DropdownMenuItem onClick={() => handleConvertClick(lead)}>
-                                                    <ArrowRightLeft className="h-4 w-4 mr-2" />
-                                                    Crear Deal
-                                                </DropdownMenuItem>
                                                 <DropdownMenuItem
                                                     onClick={() => handleDelete(lead.id)}
                                                     className="text-destructive focus:text-destructive"
@@ -331,53 +373,8 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                 lead={editingLead}
                 clients={clients}
                 users={users}
-                onConvert={(lead) => {
-                    setFormOpen(false)
-                    handleConvertClick(lead)
-                }}
                 currency={currency}
             />
-
-            {/* Convert to Deal Modal */}
-            <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Convertir a Deal</DialogTitle>
-                        <DialogDescription>
-                            Crea un Deal en el Pipeline a partir de este Lead.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form action={handleConvertSubmit} className="space-y-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="title">Título del Deal</Label>
-                            <Input
-                                id="title"
-                                name="title"
-                                required
-                                defaultValue={convertingLead?.company ? `${convertingLead.company} - Nuevo Proyecto` : convertingLead?.name ? `${convertingLead.name} - Oportunidad` : ''}
-                            />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="value">Valor Estimado ({currency === 'USD' ? '$' : '€'})</Label>
-                            <Input
-                                id="value"
-                                name="value"
-                                type="number"
-                                required
-                                defaultValue={convertingLead?.value || 0}
-                            />
-                        </div>
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setConvertOpen(false)}>
-                                Cancelar
-                            </Button>
-                            <Button type="submit" disabled={isPending}>
-                                {isPending ? 'Creando...' : 'Crear Deal'}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
         </div>
     )
 }
