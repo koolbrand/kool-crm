@@ -346,15 +346,30 @@ export async function deleteLead(id: string) {
         return { error: 'Not authenticated' }
     }
 
-    // Get current user role
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    // Get current user role and tenant
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, tenant_id')
+        .eq('id', user.id)
+        .single()
+
     const isAdmin = profile?.role === 'admin'
 
-    let query = supabase.from('leads').delete().eq('id', id)
+    // Use Admin Client to bypass RLS (which might still demand user_id=auth.uid())
+    // We enforce security via the query filters below.
+    const adminSupabase = getAdminClient()
 
-    // If not admin, ensure they own the lead
+    let query = adminSupabase.from('leads').delete().eq('id', id)
+
+    // If not admin, ensure lead belongs to their tenant
     if (!isAdmin) {
-        query = query.eq('user_id', user.id)
+        if (profile?.tenant_id) {
+            query = query.eq('tenant_id', profile.tenant_id)
+        } else {
+            // Fallback: Must own the lead directly if no tenant assigned.
+            // Note: Admin client doesn't know 'auth.uid()', so we must be explicit.
+            query = query.eq('user_id', user.id)
+        }
     }
 
     const { error } = await query
