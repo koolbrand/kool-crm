@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Tenant, createTenant, updateTenant, deleteTenant } from './actions'
 import { useRouter } from 'next/navigation'
 import { Input } from "@/components/ui/input"
@@ -33,7 +33,8 @@ import {
     Plus,
     Building2,
     ShieldCheck,
-    CreditCard
+    CreditCard,
+    Loader2
 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import {
@@ -51,13 +52,18 @@ const STATUS_LABELS: Record<string, string> = {
     cancelled: 'Cancelado'
 }
 
-export function CompaniesTable({ tenants }: { tenants: Tenant[] }) {
+export function CompaniesTable({ tenants: initialTenants }: { tenants: Tenant[] }) {
+    const [tenants, setTenants] = useState(initialTenants)
     const [searchQuery, setSearchQuery] = useState('')
     const [addModalOpen, setAddModalOpen] = useState(false)
     const [editModalOpen, setEditModalOpen] = useState(false)
     const [editingTenant, setEditingTenant] = useState<Tenant | null>(null)
     const [isPending, startTransition] = useTransition()
     const router = useRouter()
+
+    useEffect(() => {
+        setTenants(initialTenants)
+    }, [initialTenants])
 
     const filteredTenants = tenants.filter(t =>
         t.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -86,13 +92,52 @@ export function CompaniesTable({ tenants }: { tenants: Tenant[] }) {
         })
     }
 
+    const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+
+    useEffect(() => {
+        setTenants(initialTenants)
+
+        // Polling logic: Only keep IDs in deletingIds if they still exist in initialTenants
+        const currentIds = new Set(initialTenants.map(t => t.id))
+        const stillDeletingIds = new Set(
+            Array.from(deletingIds).filter(id => currentIds.has(id))
+        )
+
+        // Only update state if the set of IDs has actually changed
+        if (stillDeletingIds.size !== deletingIds.size) {
+            setDeletingIds(stillDeletingIds)
+        }
+
+        // If we still have items marked for deletion that are present, keep polling
+        if (stillDeletingIds.size > 0) {
+            const timer = setTimeout(() => {
+                router.refresh()
+            }, 1000)
+            return () => clearTimeout(timer)
+        }
+    }, [initialTenants, deletingIds])
+
+    function handleEdit(tenant: Tenant) {
+        setEditingTenant(tenant)
+        setEditModalOpen(true)
+    }
+
     function handleDelete(id: string) {
         if (!confirm('¿Estás seguro? Esta empresa debe tener 0 usuarios para poder eliminarse.')) return
+
+        setDeletingIds(prev => new Set(prev).add(id))
 
         startTransition(async () => {
             const result = await deleteTenant(id)
             if (!result.success) {
                 alert('Error: ' + result.error)
+                setDeletingIds(prev => {
+                    const next = new Set(prev)
+                    next.delete(id)
+                    return next
+                })
+            } else {
+                router.refresh()
             }
         })
     }
@@ -153,9 +198,22 @@ export function CompaniesTable({ tenants }: { tenants: Tenant[] }) {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredTenants.map(tenant => (
-                                <TableRow key={tenant.id}>
-                                    <TableCell className="font-medium">{tenant.name}</TableCell>
+                            filteredTenants.map((tenant) => (
+                                <TableRow key={tenant.id} className={deletingIds.has(tenant.id) ? "opacity-50 pointer-events-none bg-muted/50" : ""}>
+                                    <TableCell className="font-medium">
+                                        <div className="flex items-center gap-3">
+                                            {deletingIds.has(tenant.id) ? (
+                                                <div className="h-10 w-10 rounded-lg flex items-center justify-center">
+                                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                                </div>
+                                            ) : (
+                                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
+                                                    <Building2 className="h-5 w-5" />
+                                                </div>
+                                            )}
+                                            {tenant.name}
+                                        </div>
+                                    </TableCell>
                                     <TableCell>
                                         <Badge variant="secondary" className={getStatusColor(tenant.status)}>
                                             {STATUS_LABELS[tenant.status] || tenant.status}

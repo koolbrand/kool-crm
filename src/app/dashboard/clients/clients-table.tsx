@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { type Profile } from './actions'
 import { type Tenant } from '../companies/actions'
@@ -32,7 +32,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { MoreHorizontal, Shield, User, Copy, Check, Key, Trash2, UserPlus, Pencil } from 'lucide-react'
+import { MoreHorizontal, Shield, User, Copy, Check, Key, Trash2, UserPlus, Pencil, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
     Select,
@@ -166,22 +166,56 @@ export function ClientsTable({ clients: initialClients, tenants }: ClientsTableP
         })
     }
 
+    const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+
+    useEffect(() => {
+        setClients(initialClients)
+
+        // Polling logic
+        const currentIds = new Set(initialClients.map(c => c.id))
+        const stillDeletingIds = new Set(
+            Array.from(deletingIds).filter(id => currentIds.has(id))
+        )
+
+        if (stillDeletingIds.size !== deletingIds.size) {
+            setDeletingIds(stillDeletingIds)
+        }
+
+        if (stillDeletingIds.size > 0) {
+            const timer = setTimeout(() => {
+                router.refresh()
+            }, 1000)
+            return () => clearTimeout(timer)
+        }
+    }, [initialClients, deletingIds])
+
     async function handleDeleteClient(clientId: string) {
         if (!confirm('¿Estás seguro de que deseas eliminar este usuario? Esto eliminará todos sus leads permanentemente.')) return
+
+        setDeletingIds(prev => new Set(prev).add(clientId))
 
         startTransition(async () => {
             try {
                 const result = await deleteClient(clientId)
 
                 if (result.success) {
-                    setClients(prev => prev.filter(c => c.id !== clientId))
                     router.refresh()
                 } else {
                     alert('Error: ' + (result.error || 'Unknown error'))
+                    setDeletingIds(prev => {
+                        const next = new Set(prev)
+                        next.delete(clientId)
+                        return next
+                    })
                 }
             } catch (err) {
                 console.error('Delete exception:', err)
                 alert('Error deleting user')
+                setDeletingIds(prev => {
+                    const next = new Set(prev)
+                    next.delete(clientId)
+                    return next
+                })
             }
         })
     }

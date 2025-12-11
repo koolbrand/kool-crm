@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Product, createProduct, updateProduct, deleteProduct } from './actions'
+import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -28,7 +29,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Package } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Package, Loader2 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from "@/components/ui/switch"
 
@@ -37,9 +38,14 @@ interface ProductsTableProps {
 }
 
 export function ProductsTable({ products: initialProducts }: ProductsTableProps) {
+    const router = useRouter()
     const [products, setProducts] = useState(initialProducts)
     const [searchQuery, setSearchQuery] = useState('')
     const [isPending, startTransition] = useTransition()
+
+    useEffect(() => {
+        setProducts(initialProducts)
+    }, [initialProducts])
 
     // Add Modal
     const [addModalOpen, setAddModalOpen] = useState(false)
@@ -80,10 +86,46 @@ export function ProductsTable({ products: initialProducts }: ProductsTableProps)
         })
     }
 
+    const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+
+    useEffect(() => {
+        setProducts(initialProducts)
+
+        // Polling logic
+        const currentIds = new Set(initialProducts.map(p => p.id))
+        const stillDeletingIds = new Set(
+            Array.from(deletingIds).filter(id => currentIds.has(id))
+        )
+
+        if (stillDeletingIds.size !== deletingIds.size) {
+            setDeletingIds(stillDeletingIds)
+        }
+
+        if (stillDeletingIds.size > 0) {
+            const timer = setTimeout(() => {
+                router.refresh()
+            }, 1000)
+            return () => clearTimeout(timer)
+        }
+    }, [initialProducts, deletingIds])
+
     async function handleDelete(id: string) {
         if (!confirm('Are you sure you want to delete this product?')) return
+
+        setDeletingIds(prev => new Set(prev).add(id))
+
         startTransition(async () => {
-            await deleteProduct(id)
+            const result = await deleteProduct(id)
+            if (result.error) {
+                alert('Error deleting product: ' + result.error)
+                setDeletingIds(prev => {
+                    const next = new Set(prev)
+                    next.delete(id)
+                    return next
+                })
+            } else {
+                router.refresh()
+            }
         })
     }
 
@@ -129,12 +171,18 @@ export function ProductsTable({ products: initialProducts }: ProductsTableProps)
                             </TableRow>
                         ) : (
                             filteredProducts.map((product) => (
-                                <TableRow key={product.id}>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-primary">
-                                                <Package className="h-4 w-4" />
-                                            </div>
+                                <TableRow key={product.id} className={deletingIds.has(product.id) ? "opacity-50 pointer-events-none bg-muted/50" : ""}>
+                                    <TableCell className="font-medium">
+                                        <div className="flex items-center gap-2">
+                                            {deletingIds.has(product.id) ? (
+                                                <div className="h-8 w-8 rounded-full flex items-center justify-center">
+                                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                </div>
+                                            ) : (
+                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
+                                                    <Package className="h-4 w-4" />
+                                                </div>
+                                            )}
                                             <div>
                                                 <div className="font-medium">{product.name}</div>
                                                 <div className="text-xs text-muted-foreground truncate max-w-[200px]">{product.description}</div>

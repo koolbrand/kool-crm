@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { type Lead, deleteLead } from './actions'
 import { LeadForm } from './lead-form'
 import { Button } from "@/components/ui/button"
@@ -29,7 +29,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { MoreHorizontal, Pencil, Trash2, Mail, Phone, Building2, Plus, Search, Instagram, Facebook, Download } from 'lucide-react'
+import { MoreHorizontal, Pencil, Trash2, Mail, Phone, Building2, Plus, Search, Instagram, Facebook, Download, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { useRouter } from 'next/navigation'
@@ -53,11 +53,16 @@ interface LeadsTableProps {
 }
 
 export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [], users = [], currency }: LeadsTableProps) {
-    // const [leads] = useState(initialLeads) // Removed to allow server updates
+    const [leads, setLeads] = useState(initialLeads)
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<string>('all')
     const [dateFrom, setDateFrom] = useState<string>('')
     const [dateTo, setDateTo] = useState<string>('')
+
+    useEffect(() => {
+        setLeads(initialLeads)
+    }, [initialLeads])
+
     const [formOpen, setFormOpen] = useState(false)
     const [editingLead, setEditingLead] = useState<Lead | null>(null)
     const [isPending, startTransition] = useTransition()
@@ -93,10 +98,46 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
         setFormOpen(true)
     }
 
+    const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+
+    // Sincronización básica: Si cambia la prop, actualizamos el estado (a menos que estemos borrando algo)
+    useEffect(() => {
+        setLeads(initialLeads)
+
+        // Polling logic
+        const currentIds = new Set(initialLeads.map(l => l.id))
+        const stillDeletingIds = new Set(
+            Array.from(deletingIds).filter(id => currentIds.has(id))
+        )
+
+        if (stillDeletingIds.size !== deletingIds.size) {
+            setDeletingIds(stillDeletingIds)
+        }
+
+        if (stillDeletingIds.size > 0) {
+            const timer = setTimeout(() => {
+                router.refresh()
+            }, 1000)
+            return () => clearTimeout(timer)
+        }
+    }, [initialLeads, deletingIds])
+
     function handleDelete(id: string) {
         if (confirm('¿Estás seguro de que deseas eliminar este lead?')) {
+            setDeletingIds(prev => new Set(prev).add(id))
+
             startTransition(async () => {
-                await deleteLead(id)
+                const result = await deleteLead(id)
+                if (result.error) {
+                    alert('Error deleting lead: ' + result.error)
+                    setDeletingIds(prev => {
+                        const next = new Set(prev)
+                        next.delete(id)
+                        return next
+                    })
+                } else {
+                    router.refresh()
+                }
             })
         }
     }
@@ -221,12 +262,18 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                             </TableRow>
                         ) : (
                             filteredLeads.map((lead) => (
-                                <TableRow key={lead.id} className="border-border hover:bg-muted/30">
+                                <TableRow key={lead.id} className={deletingIds.has(lead.id) ? "opacity-50 pointer-events-none bg-muted/50 border-border" : "border-border hover:bg-muted/30"}>
                                     <TableCell>
                                         <div className="flex items-center gap-3">
-                                            <div className="h-9 w-9 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center text-primary font-bold text-sm">
-                                                {lead.name.substring(0, 2).toUpperCase()}
-                                            </div>
+                                            {deletingIds.has(lead.id) ? (
+                                                <div className="h-9 w-9 rounded-full flex items-center justify-center">
+                                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                </div>
+                                            ) : (
+                                                <div className="h-9 w-9 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center text-primary font-bold text-sm">
+                                                    {lead.name.substring(0, 2).toUpperCase()}
+                                                </div>
+                                            )}
                                             <div>
                                                 <button
                                                     onClick={() => handleEdit(lead)}
