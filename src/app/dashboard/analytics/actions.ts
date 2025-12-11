@@ -24,7 +24,7 @@ export async function getAnalyticsData(): Promise<AnalyticsData> {
 
     // Build query for leads - RLS will filter by tenant automatically for clients
     // But we explicitly filter for clarity and for admins who might want all data
-    let query = supabase.from('leads').select('*')
+    const query = supabase.from('leads').select('*')
 
     // If client (not admin), RLS will filter by tenant_id
     // For admins without a specific tenant filter, we get all leads

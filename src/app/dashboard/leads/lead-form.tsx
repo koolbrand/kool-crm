@@ -20,15 +20,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-} from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { createLead, updateLead, type Lead } from './actions'
 import { createNote, type ActivityType } from '@/app/dashboard/notes/actions'
-import { Loader2, Coins, User, Briefcase, Plus, Send } from 'lucide-react'
+import { Loader2, Coins, User, Briefcase, Send } from 'lucide-react'
 import { ActivityList } from '@/components/notes/activity-timeline'
 
 const statusOptions = [
@@ -126,7 +121,7 @@ export function LeadForm({ open, onOpenChange, lead, clients, users, currency = 
 
         startTransition(async () => {
             // 1. Save/Create Lead
-            let leadId = lead?.id
+            const leadId = lead?.id
             let result
 
             if (isEditing && lead) {

@@ -314,7 +314,7 @@ export async function updateLead(id: string, formData: FormData) {
         }
     }
 
-    let query = supabase.from('leads').update(updates).eq('id', id)
+    const query = supabase.from('leads').update(updates).eq('id', id)
 
     // If not admin, ensure they own the lead
     if (!isAdmin) {

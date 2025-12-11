@@ -48,6 +48,7 @@ export function ActivityList({ entityType, entityId, refreshTrigger = 0 }: Activ
     // Load notes on mount or when trigger changes
     useEffect(() => {
         let mounted = true
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsLoading(true)
         getNotes(entityType, entityId).then(data => {
             if (mounted) {

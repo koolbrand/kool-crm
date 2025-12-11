@@ -20,12 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-} from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { createDeal, updateDeal, type Deal } from './actions'
 import { createNote, type ActivityType } from '@/app/dashboard/notes/actions'
 import { Loader2 } from 'lucide-react'
@@ -65,7 +60,7 @@ export function DealForm({ open, onOpenChange, deal, currency = 'EUR' }: DealFor
         const noteType = activityType
 
         startTransition(async () => {
-            let dealId = deal?.id
+            const dealId = deal?.id
             let result
 
             if (isEditing && deal) {
