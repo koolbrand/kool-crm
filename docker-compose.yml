@@ -4,8 +4,14 @@ services:
     container_name: kool-crm
     restart: always
     ports:
-      - "3000:3000"
+      - "3005:3000"
     env_file:
       - .env.local
     environment:
       - NODE_ENV=production
+    networks:
+      - kool-net
+
+networks:
+  kool-net:
+    external: true
