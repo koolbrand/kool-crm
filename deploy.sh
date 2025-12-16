@@ -21,7 +21,16 @@ rsync -avz --delete \
 
 # Run docker compose
 echo "Starting Docker containers..."
-ssh $REMOTE_USER@$REMOTE_HOST "export PATH=\$PATH:/usr/local/bin && cd $REMOTE_DIR && docker compose down && docker compose up -d --build"
+ssh $REMOTE_USER@$REMOTE_HOST "export PATH=\$PATH:/usr/local/bin && \
+mkdir -p /tmp/docker-fix && \
+echo '{\"auths\":{},\"credsStore\":\"\",\"credHelpers\":{}}' > /tmp/docker-fix/config.json && \
+export DOCKER_CONFIG=/tmp/docker-fix && \
+cd $REMOTE_DIR && \
+# Pre-pull base images
+awk '/^FROM/ {print \$2}' Dockerfile | xargs -n1 docker pull || true && \
+docker-compose down && \
+docker-compose up -d --build && \
+rm -rf /tmp/docker-fix"
 
 if [ $? -eq 0 ]; then
   echo "Deployment successful! App running at http://$REMOTE_HOST:3005"
