@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SubmitButton } from './submit-button'
 
 export default async function LoginPage({
     searchParams,
@@ -37,7 +38,7 @@ export default async function LoginPage({
                             {error}
                         </div>
                     )}
-                    <form className="grid gap-4">
+                    <form className="grid gap-4" action={login}>
                         <div className="grid gap-2">
                             <Label htmlFor="email">Email</Label>
                             <Input id="email" name="email" type="email" placeholder="m@example.com" required className="bg-background/40 border-input/50 focus-visible:ring-primary" />
@@ -47,10 +48,12 @@ export default async function LoginPage({
                             <Input id="password" name="password" type="password" required className="bg-background/40 border-input/50 focus-visible:ring-primary" />
                         </div>
 
+
+
                         <div className="flex flex-col gap-2 mt-4">
-                            <Button formAction={login} className="w-full font-bold shadow-[0_0_20px_-5px_var(--color-primary)] hover:shadow-[0_0_30px_-5px_var(--color-primary)] transition-shadow duration-300">
+                            <SubmitButton className="w-full font-bold shadow-[0_0_20px_-5px_var(--color-primary)] hover:shadow-[0_0_30px_-5px_var(--color-primary)] transition-shadow duration-300">
                                 Sign In
-                            </Button>
+                            </SubmitButton>
                         </div>
                     </form>
                 </CardContent>
