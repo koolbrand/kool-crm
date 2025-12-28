@@ -15,6 +15,7 @@ import {
     FileText,
     ChevronLeft,
     ChevronRight,
+    CheckSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { signOut } from "@/app/login/actions"
@@ -25,6 +26,11 @@ const routes = [
         label: "Panel",
         icon: LayoutDashboard,
         href: "/dashboard",
+    },
+    {
+        label: "Agenda",
+        icon: CheckSquare,
+        href: "/dashboard/tasks",
     },
     {
         label: "Leads",

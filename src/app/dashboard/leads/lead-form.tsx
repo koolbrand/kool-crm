@@ -21,10 +21,11 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { createLead, updateLead, type Lead } from './actions'
+import { createLead, updateLead, getActivities, getLeadTasks, type Lead, type Activity } from './actions'
 import { createNote, type ActivityType } from '@/app/dashboard/notes/actions'
+import { type Task } from '@/app/dashboard/tasks/actions'
 import { Loader2, Coins, User, Briefcase, Send } from 'lucide-react'
-import { ActivityList } from '@/components/notes/activity-timeline'
+import { ActivityTimeline } from '@/components/leads/activity-timeline'
 
 const statusOptions = [
     { value: 'new', label: 'Nuevo', color: 'bg-blue-500' },
@@ -67,11 +68,9 @@ export function LeadForm({ open, onOpenChange, lead, clients, users, currency = 
     const [assignedUserId, setAssignedUserId] = useState<string>(lead?.user_id || '')
     const [activeTab, setActiveTab] = useState('details')
 
-    // New state for activity input
-    // New state for activity input
-    const [activityType] = useState<ActivityType>('note')
-    const [noteContent, setNoteContent] = useState('')
-    const [isAddingNote, setIsAddingNote] = useState(false)
+    // Data for timeline
+    const [tasks, setTasks] = useState<Task[]>([])
+    const [activities, setActivities] = useState<Activity[]>([])
     const [refreshTrigger, setRefreshTrigger] = useState(0) // Trigger list refresh
 
     // Sync state with lead prop when it changes
@@ -80,33 +79,29 @@ export function LeadForm({ open, onOpenChange, lead, clients, users, currency = 
         setSource(lead?.source || '')
         setAssignedTenantId(lead?.tenant_id || '')
         setAssignedUserId(lead?.user_id || '')
-        setActiveTab('details')
-        setNoteContent('')
+        // Do NOT reset active tab if just refreshing data, but here lead prop changes usually mean new open.
+        // If we want to persist tab during edits, we might need logic. For now default details.
+        // setActiveTab('details') 
     }, [lead])
+
+    // Load Tasks and Activities when tab is 'activity' or refresh triggered
+    useEffect(() => {
+        if (!lead?.id || activeTab !== 'activity') return
+
+        const fetchData = async () => {
+            const [t, a] = await Promise.all([
+                getLeadTasks(lead.id),
+                getActivities(lead.id)
+            ])
+            setTasks(t)
+            setActivities(a)
+        }
+        fetchData()
+    }, [lead?.id, activeTab, refreshTrigger])
 
     const isEditing = !!lead
 
-    async function handleAddActivity() {
-        if (!noteContent.trim() || !lead?.id) return
 
-        setIsAddingNote(true)
-        try {
-            const noteFormData = new FormData()
-            noteFormData.set('content', noteContent)
-            noteFormData.set('type', activityType)
-            noteFormData.set('leadId', lead.id)
-
-            const result = await createNote(noteFormData)
-            if (result?.error) {
-                alert(`Error guardando actividad: ${result.error}`)
-            } else {
-                setNoteContent('')
-                setRefreshTrigger(prev => prev + 1)
-            }
-        } finally {
-            setIsAddingNote(false)
-        }
-    }
 
     async function handleSubmit(formData: FormData) {
         // Collect lead data manually as needed or rely on formData
@@ -117,6 +112,7 @@ export function LeadForm({ open, onOpenChange, lead, clients, users, currency = 
 
         // Capture note data from the form
         const noteContent = formData.get('note_content') as string
+        const activityType: ActivityType = 'note' // Legacy constant
         const noteType = activityType
 
         startTransition(async () => {
@@ -142,15 +138,8 @@ export function LeadForm({ open, onOpenChange, lead, clients, users, currency = 
             }
 
             // 2. Save Note if present and we have an ID (mostly for Edit case now)
-            if (noteContent && noteContent.trim() !== '' && leadId) {
-                const noteFormData = new FormData()
-                noteFormData.set('content', noteContent)
-                noteFormData.set('type', noteType)
-                noteFormData.set('leadId', leadId)
+            // Legacy note logic removed in favor of ActivityTimeline
 
-                await createNote(noteFormData)
-                setRefreshTrigger(prev => prev + 1) // Refresh list
-            }
 
             onOpenChange(false)
         })
@@ -392,39 +381,15 @@ export function LeadForm({ open, onOpenChange, lead, clients, users, currency = 
                             </div>
                         </div>
 
-                        <div className={activeTab === 'activity' ? 'flex-1 overflow-hidden m-0 flex flex-col h-full bg-muted/10 p-0' : 'hidden'}>
-                            {/* Activity Input Area */}
-                            <div className="p-4 bg-background border-b border-border shadow-sm z-10">
-                                <Label className="mb-2 block font-semibold">Registrar Nueva Actividad</Label>
-                                <div className="space-y-3">
-                                    <div className="flex gap-2">
-                                        <Textarea
-                                            value={noteContent}
-                                            onChange={(e) => setNoteContent(e.target.value)}
-                                            placeholder="Escribe una nota o registra una actividad..."
-                                            className="min-h-[80px] bg-background resize-none focus-visible:ring-primary flex-1"
-                                        />
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        onClick={handleAddActivity}
-                                        disabled={!noteContent.trim() || isAddingNote}
-                                        className="w-full"
-                                    >
-                                        {isAddingNote ? (
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        ) : (
-                                            <Send className="h-4 w-4 mr-2" />
-                                        )}
-                                        Añadir Actividad
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Timeline */}
-                            <div className="flex-1 overflow-hidden">
-                                {lead && <ActivityList entityType="lead" entityId={lead.id} refreshTrigger={refreshTrigger} />}
-                            </div>
+                        <div className={activeTab === 'activity' ? 'flex-1 overflow-hidden m-0 flex flex-col h-full bg-muted/10 p-4' : 'hidden'}>
+                            {lead && (
+                                <ActivityTimeline
+                                    leadId={lead.id}
+                                    tasks={tasks}
+                                    activities={activities}
+                                    onTaskCreated={() => setRefreshTrigger(prev => prev + 1)}
+                                />
+                            )}
                         </div>
                     </Tabs>
 

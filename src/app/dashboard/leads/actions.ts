@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
+import type { Task } from '@/app/dashboard/tasks/actions'
 
 // Admin client helper
 function getAdminClient() {
@@ -491,4 +492,21 @@ export async function getAllProfilesForAdmin() {
         .order('email')
 
     return data || []
+}
+
+export async function getLeadTasks(leadId: string): Promise<Task[]> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('due_date', { ascending: true })
+
+    if (error) {
+        console.error('Error fetching lead tasks:', error)
+        return []
+    }
+
+    return (data || []) as unknown as Task[]
 }

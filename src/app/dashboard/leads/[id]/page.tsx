@@ -1,4 +1,4 @@
-import { getLeadDetails, getActivities } from '../actions'
+import { getLeadDetails, getActivities, getLeadTasks } from '../actions'
 import { LeadProfile } from '@/components/leads/lead-profile'
 import { ActivityTimeline } from '@/components/leads/activity-timeline'
 import { notFound } from 'next/navigation'
@@ -13,9 +13,10 @@ interface PageProps {
 export default async function LeadDetailsPage({ params }: PageProps) {
     const { id } = params
 
-    const [lead, activities] = await Promise.all([
+    const [lead, activities, tasks] = await Promise.all([
         getLeadDetails(id),
-        getActivities(id)
+        getActivities(id),
+        getLeadTasks(id)
     ])
 
     if (!lead) {
@@ -41,7 +42,7 @@ export default async function LeadDetailsPage({ params }: PageProps) {
                     <LeadProfile lead={lead} />
                 </div>
                 <div className="lg:col-span-2">
-                    <ActivityTimeline leadId={lead.id} activities={activities} />
+                    <ActivityTimeline leadId={lead.id} activities={activities} tasks={tasks} />
                 </div>
             </div>
         </div>

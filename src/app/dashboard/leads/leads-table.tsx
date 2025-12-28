@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { type Lead, deleteLead } from './actions'
-import { LeadForm } from './lead-form'
+import { LeadSheet } from './lead-sheet'
 import { Button } from "@/components/ui/button"
 import Link from 'next/link'
 import { Badge } from "@/components/ui/badge"
@@ -404,8 +404,8 @@ export function LeadsTable({ leads: initialLeads, showOwner = false, clients = [
                 </span>
             </div>
 
-            {/* Lead Form Modal */}
-            <LeadForm
+            {/* Lead Sheet Side Panel */}
+            <LeadSheet
                 open={formOpen}
                 onOpenChange={handleFormClose}
                 lead={editingLead}
