@@ -6,6 +6,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
+# We need to install EVERYTHING (including devDependencies) to build the app
 RUN npm ci
 
 # 2. Rebuild the source code only when needed
@@ -14,7 +15,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Environment variables for build time
+# Environment variables for build time (Public ones)
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG SUPABASE_SERVICE_ROLE_KEY
@@ -23,7 +24,6 @@ ARG FB_APP_SECRET
 ARG FB_ACCESS_TOKEN
 ARG GEMINI_API_KEY
 ARG NEXT_TELEMETRY_DISABLED=1
-ARG NODE_ENV=production
 
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -33,7 +33,10 @@ ENV FB_APP_SECRET=$FB_APP_SECRET
 ENV FB_ACCESS_TOKEN=$FB_ACCESS_TOKEN
 ENV GEMINI_API_KEY=$GEMINI_API_KEY
 ENV NEXT_TELEMETRY_DISABLED=$NEXT_TELEMETRY_DISABLED
-ENV NODE_ENV=$NODE_ENV
+
+# Crucial: DO NOT set NODE_ENV to production here, 
+# otherwise Next.js build might fail due to missing devDeps during transpilation
+ENV NODE_ENV=development
 
 RUN npm run build
 
